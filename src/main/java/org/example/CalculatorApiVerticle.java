@@ -18,8 +18,6 @@ public class CalculatorApiVerticle extends AbstractVerticle {
         // Enable body parsing for JSON payloads
         router.route().handler(BodyHandler.create());
 
-        JoinStringHandler joinStringHandler = new JoinStringHandler();
-
         // Routes for different operations
         router.post("/api/calculate/add").handler(this::addHandler);
         router.post("/api/calculate/subtract").handler(this::subtractHandler);
@@ -28,8 +26,9 @@ public class CalculatorApiVerticle extends AbstractVerticle {
         router.post("/api/calculate/power").handler(this::powerHandler);
         router.post("/api/calculate/sqrt").handler(this::sqrtHandler);
         router.post("/api/calculate/batch").handler(this::batchCalculationHandler);
-        router.post("/api/string/join").handler(joinStringHandler);
+        router.post("/api/string/join").handler(new JoinStringHandler());
         router.post("/api/string/replace").handler(this::replaceStringHandler);
+        router.post("/api/trx/submit").handler(new TestMapHandler());
 
         // Health check endpoint
         router.get("/api/health").handler(this::healthHandler);
