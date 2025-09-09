@@ -18,6 +18,8 @@ public class CalculatorApiVerticle extends AbstractVerticle {
         // Enable body parsing for JSON payloads
         router.route().handler(BodyHandler.create());
 
+        JoinStringHandler joinStringHandler = new JoinStringHandler();
+
         // Routes for different operations
         router.post("/api/calculate/add").handler(this::addHandler);
         router.post("/api/calculate/subtract").handler(this::subtractHandler);
@@ -26,7 +28,7 @@ public class CalculatorApiVerticle extends AbstractVerticle {
         router.post("/api/calculate/power").handler(this::powerHandler);
         router.post("/api/calculate/sqrt").handler(this::sqrtHandler);
         router.post("/api/calculate/batch").handler(this::batchCalculationHandler);
-        router.post("/api/string/join").handler(this::joinStringHandler);
+        router.post("/api/string/join").handler(joinStringHandler);
         router.post("/api/string/replace").handler(this::replaceStringHandler);
 
         // Health check endpoint
@@ -139,14 +141,14 @@ public class CalculatorApiVerticle extends AbstractVerticle {
         }
     }
 
-    private void joinStringHandler(RoutingContext context) {
-        parseStrings(context)
-                .flatMap(strings -> performString(strings, this::joinString, "join string"))
-                .subscribe(
-                        result -> sendResponse(context, result),
-                        error -> sendError(context, error)
-                );
-    }
+//    private void joinStringHandler(RoutingContext context) {
+//        parseStrings(context)
+//                .flatMap(strings -> performString(strings, this::joinString, "join string"))
+//                .subscribe(
+//                        result -> sendResponse(context, result),
+//                        error -> sendError(context, error)
+//                );
+//    }
 
     private void replaceStringHandler(RoutingContext context) {
         parseStrings(context)
