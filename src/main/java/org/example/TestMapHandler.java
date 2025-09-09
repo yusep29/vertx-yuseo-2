@@ -2,8 +2,12 @@ package org.example;
 
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.core.ObservableSource;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.vertx.core.Handler;
+import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
+import io.vertx.rxjava3.RxHelper;
 import io.vertx.rxjava3.ext.web.RoutingContext;
 
 import java.util.Objects;
@@ -18,6 +22,8 @@ public class TestMapHandler implements Handler<RoutingContext> {
         getRequest(routingContext)
                 .concatMap(this::isRequestValid)
                 .concatMap(this::processRequest)
+                .subscribeOn(Schedulers.io())
+                .observeOn(RxHelper.scheduler(Vertx.vertx()))
                 .subscribe(
                         response -> finalResponse(routingContext, response),
                         error -> badRequestResponse(routingContext, error)
@@ -51,10 +57,25 @@ public class TestMapHandler implements Handler<RoutingContext> {
     }
 
     private Observable<JsonObject> processRequest(JsonObject request) {
-        return getData(request)
+        return Observable.defer(()-> getData(request))
                 .concatMap(this::hitApiClient)
-                .concatMap(response -> processResponseApiClient(response, request))
+                .concatMap(responseFromClient -> processResponseApiClient(responseFromClient, request))
+                .concatMap(resp -> saveResult(resp, request))
+                .concatMap(this::notifyMerchant)
+                .concatMap(this::notifyClient)
                 .onErrorResumeNext(err -> handlingErrorInProcess(err, request));
+    }
+
+    private Observable<JsonObject> notifyClient(JsonObject resp) {
+        return Observable.just(resp);
+    }
+
+    private Observable<JsonObject> notifyMerchant(JsonObject resp) {
+        return Observable.just(resp);
+    }
+
+    private Observable<JsonObject> saveResult(JsonObject resp, JsonObject request) {
+        return Observable.just(resp);
     }
 
     private Observable<JsonObject> handlingErrorInProcess(Throwable err, JsonObject request) {
