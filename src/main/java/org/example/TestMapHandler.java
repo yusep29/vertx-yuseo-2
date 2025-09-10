@@ -59,19 +59,42 @@ public class TestMapHandler implements Handler<RoutingContext> {
                 .end(response.encodePrettily());
     }
 
+    /** main process flow */
     private Observable<JsonObject> processRequest(JsonObject request) {
         return Observable.defer(()-> getData(request))
-                .concatMap(this::hitApiClient)
-                .concatMap(responseFromClient -> processResponseApiClient(responseFromClient, request))
-                .concatMap(resp -> saveResult(resp, request))
+                .concatMap(dataFromDb -> isRequestCanBeProcess(dataFromDb, request))
+                .concatMap(dataFromDb -> processPart1(dataFromDb, request))
+                .concatMap(dataFromPart1 -> processPart2(dataFromPart1, request))
+                .concatMap(result -> buildResponseSuccessFinal(result, request))
                 .concatMap(this::sendNotification)
                 .onErrorResumeNext(err -> handlingErrorInProcess(err, request));
     }
     
+    /** process 1 */
+    private Observable<JsonObject> processPart1(JsonObject dataFromDb, JsonObject request){
+        return Observable.defer(()-> hitApiClient(dataFromDb))
+                .concatMap(responseFromClient -> processResponseApiClient(responseFromClient, request))
+                .concatMap(resp -> saveResult(resp, request))
+                .onErrorResumeNext(err -> {throw new Exception("err4");});
+    }
+
+    /** process 2 - request data from process 1 */
+    private Observable<JsonObject> processPart2(JsonObject dataFromPart1, JsonObject request){
+        return Observable.defer(()-> hitApiClient2(dataFromPart1))
+                .concatMap(responseFromClient -> processResponseApiClient(responseFromClient, request))
+                .concatMap(resp -> saveResult(resp, request))
+                .onErrorResumeNext(err -> {throw new Exception("err5");});
+    }
+    
+
+    /** part notification. the process status is success even the notification not success */
     private Observable<JsonObject> sendNotification(JsonObject resp){
-        return notifyClient(resp)
-                .concatMap(x -> notifyMerchant(resp))
-                .map(x -> resp);
+        return Observable.fromCallable(()-> resp)
+                .doOnComplete(() ->{
+                    Thread.sleep(5000);
+                    notifyClient(resp)
+                            .concatMap(x -> notifyMerchant(resp)).subscribe();
+                });
     }
 
     private Observable<JsonObject> notifyClient(JsonObject resp) {
@@ -102,6 +125,7 @@ public class TestMapHandler implements Handler<RoutingContext> {
         return Observable.just(resp);
     }
 
+    /** main error handler, convert all error itu response error */
     private Observable<JsonObject> handlingErrorInProcess(Throwable err, JsonObject request) {
         
         err.printStackTrace();
@@ -118,18 +142,29 @@ public class TestMapHandler implements Handler<RoutingContext> {
     private Observable<JsonObject> processResponseApiClient(String response, JsonObject request) {
         if (Objects.equals(response, successEnum)) {
             String responseMsg = "ini sukses mantap";
-            return buildResponseSuccess(responseMsg, request);
+            return buildResponseSuccessFromClientApi(responseMsg, request);
         } else {
             return buildResponseFailed("01", request);
         }
     }
 
-    private Observable<JsonObject> buildResponseSuccess(String response, JsonObject request) {
+    private Observable<JsonObject> buildResponseSuccessFromClientApi(String response, JsonObject request) {
+        return Observable.fromCallable(()->{
+            JsonObject resp = new JsonObject();
+            resp.put(reqIdEnum, request.getString(reqIdEnum));
+            resp.put("statusClient",successEnum);
+            resp.put("data",response);
+            return resp;
+        });
+    }
+
+    /** main process to build response */
+    private Observable<JsonObject> buildResponseSuccessFinal(JsonObject result, JsonObject request) {
         return Observable.fromCallable(()->{
             JsonObject resp = new JsonObject();
             resp.put(reqIdEnum, request.getString(reqIdEnum));
             resp.put("status",successEnum);
-            resp.put("data",response);
+            resp.put("data",result);
             return resp;
         });
     }
@@ -149,6 +184,22 @@ public class TestMapHandler implements Handler<RoutingContext> {
                 });
     }
 
+    private Observable<String> hitApiClient2(JsonObject responseFromAPi1) {
+        return clientApi2(responseFromAPi1);
+    }
+
+    private Observable<String> clientApi2(JsonObject responseFromAPi1) {
+        return Observable.just(responseFromAPi1)
+                .concatMap( x -> {
+                    if (x.getString("statusClient").equals("success")){
+                        return Observable.just(successEnum);
+                    } else {
+                        return Observable.just("failed");
+                    }
+                });
+    }
+
+    /** main process get data for processing and validate process is eligible or not*/
     private Observable<JsonObject> getData(JsonObject request){
         return getDataFromDb(request)
                 .concatMap(this::formatingData);
@@ -212,6 +263,7 @@ public class TestMapHandler implements Handler<RoutingContext> {
         
     }
 
+    /** first validation for request body. is format ok and mandatory param in request */
     private Observable<JsonObject> isRequestValid(JsonObject request) {
         return Observable.fromCallable(()->{
             if (request.getString("a").length() > 1 && request.getString("b").length() > 1){
@@ -219,6 +271,22 @@ public class TestMapHandler implements Handler<RoutingContext> {
             } else {
                 throw new Exception("bad request");
             }
+        });
+    }
+
+    /** second validation for request body, validate user and condition transaction */
+    private Observable<JsonObject> isRequestCanBeProcess(JsonObject dataFromDb, JsonObject request) {
+        return Observable.fromCallable(()->{
+            boolean isUserOk = true;
+            boolean isTimeOk = true;
+            boolean isConditionOk = dataFromDb != null;
+            
+            if (isUserOk && isTimeOk && isConditionOk && request != null){
+                return dataFromDb;
+            } else {
+                throw new Exception("request can not be process");
+            }
+           
         });
     }
 }
