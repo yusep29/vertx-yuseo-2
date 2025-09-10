@@ -2,12 +2,10 @@ package org.example;
 
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Observable;
-import io.reactivex.rxjava3.core.ObservableSource;
+import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.vertx.core.Handler;
-import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
-import io.vertx.rxjava3.RxHelper;
 import io.vertx.rxjava3.ext.web.RoutingContext;
 
 import java.util.Objects;
@@ -16,14 +14,19 @@ public class TestMapHandler implements Handler<RoutingContext> {
     
     private static String reqIdEnum = "reqId";
     private static String successEnum = "success";
-    
+    private final Scheduler vertxScheduler;
+
+    public TestMapHandler(Scheduler vertxScheduler) {
+        this.vertxScheduler = vertxScheduler;
+    }
+
     @Override
     public void handle(RoutingContext routingContext) {
         getRequest(routingContext)
                 .concatMap(this::isRequestValid)
                 .concatMap(this::processRequest)
                 .subscribeOn(Schedulers.io())
-                .observeOn(RxHelper.scheduler(Vertx.vertx()))
+                .observeOn(vertxScheduler)
                 .subscribe(
                         response -> finalResponse(routingContext, response),
                         error -> badRequestResponse(routingContext, error)
@@ -61,17 +64,38 @@ public class TestMapHandler implements Handler<RoutingContext> {
                 .concatMap(this::hitApiClient)
                 .concatMap(responseFromClient -> processResponseApiClient(responseFromClient, request))
                 .concatMap(resp -> saveResult(resp, request))
-                .concatMap(this::notifyMerchant)
-                .concatMap(this::notifyClient)
+                .concatMap(this::sendNotification)
                 .onErrorResumeNext(err -> handlingErrorInProcess(err, request));
+    }
+    
+    private Observable<JsonObject> sendNotification(JsonObject resp){
+        return notifyClient(resp)
+                .concatMap(x -> notifyMerchant(resp))
+                .map(x -> resp);
     }
 
     private Observable<JsonObject> notifyClient(JsonObject resp) {
-        return Observable.just(resp);
+        return Observable.fromCallable(()->{
+            if (false){
+                throw new Exception("err3");
+            }
+            return resp;
+        }).onErrorResumeNext(err -> {
+            err.printStackTrace();
+            return Observable.just(resp);
+        });
     }
 
     private Observable<JsonObject> notifyMerchant(JsonObject resp) {
-        return Observable.just(resp);
+        return Observable.fromCallable(()->{
+            if (false){
+                throw new Exception("err3");
+            }
+            return resp;
+        }).onErrorResumeNext(err -> {
+            err.printStackTrace();
+            return Observable.just(resp);
+        });
     }
 
     private Observable<JsonObject> saveResult(JsonObject resp, JsonObject request) {

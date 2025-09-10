@@ -1,7 +1,9 @@
 package org.example;
 
+import io.reactivex.rxjava3.core.Scheduler;
 import io.vertx.core.json.JsonObject;
 import io.vertx.rxjava3.core.AbstractVerticle;
+import io.vertx.rxjava3.core.RxHelper;
 import io.vertx.rxjava3.core.Vertx;
 import io.vertx.rxjava3.ext.web.Router;
 import io.vertx.rxjava3.ext.web.RoutingContext;
@@ -14,6 +16,7 @@ public class CalculatorApiVerticle extends AbstractVerticle {
     @Override
     public void start() {
         Router router = Router.router(vertx);
+        Scheduler scheduler = RxHelper.scheduler(vertx);
 
         // Enable body parsing for JSON payloads
         router.route().handler(BodyHandler.create());
@@ -28,7 +31,7 @@ public class CalculatorApiVerticle extends AbstractVerticle {
         router.post("/api/calculate/batch").handler(this::batchCalculationHandler);
         router.post("/api/string/join").handler(new JoinStringHandler());
         router.post("/api/string/replace").handler(this::replaceStringHandler);
-        router.post("/api/trx/submit").handler(new TestMapHandler());
+        router.post("/api/trx/submit").handler(new TestMapHandler(scheduler));
 
         // Health check endpoint
         router.get("/api/health").handler(this::healthHandler);
